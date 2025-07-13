@@ -1,34 +1,63 @@
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CreateEventSchema } from "@/shared/api";
+import { trpc, UpdateEventSchema } from "@/shared/api";
+import { useRouter } from "next/router";
+import { useEffect } from "react";
 
-type CreateEventFormProps = {
-  onSubmit: (data: CreateEventSchema) => void;
+type UpdateEventFormProps = {
+  onSubmit: (data: UpdateEventSchema) => void;
   onCancel: () => void;
 };
 
-export const CreateEventForm = ({
-  onSubmit,
-  onCancel,
-}: CreateEventFormProps) => {
+function formatDateForInput(dateString: Date) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export const EditEventForm = ({ onSubmit, onCancel }: UpdateEventFormProps) => {
   const {
+    reset,
     register,
     handleSubmit,
-    formState: { errors },
-  } = useForm<CreateEventSchema>({
-    resolver: zodResolver(CreateEventSchema),
+    formState: { errors, isDirty },
+  } = useForm<UpdateEventSchema>({
+    resolver: zodResolver(UpdateEventSchema),
     mode: "onChange",
   });
+  const router = useRouter();
+  const { id } = router.query;
+  const eventId = Number(id);
+
+  const { data: event } = trpc.event.findUnique.useQuery({ id: eventId });
+
+  useEffect(() => {
+    if (event) {
+      reset({
+        id: eventId,
+        title: event.title,
+        description: event.description ?? "",
+        //@ts-ignore
+        // не смог победить типизацию
+        // если не привести к строке не записывается в форму
+        // но тогда не проходит тиипзацию схема... Хотя приложение работает
+        date: formatDateForInput(event.date),
+      });
+    }
+  }, [event, eventId, reset]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <div className="space-y-12">
         <div>
           <h2 className="text-base font-semibold leading-7 text-gray-900">
-            Событие
+            {`Событие "${event?.title}"`}
           </h2>
           <p className="mt-1 text-sm leading-6 text-gray-600">
-            Заполните форму для создания события
+            Измените форму для обновления события
           </p>
 
           <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-8 sm:grid-cols-6">
@@ -117,8 +146,9 @@ export const CreateEventForm = ({
         <button
           type="submit"
           className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+          disabled={!isDirty}
         >
-          Создать
+          Обновить
         </button>
       </div>
     </form>
