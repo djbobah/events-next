@@ -1,4 +1,8 @@
-import { CreateEventSchema, JoinEventSchema } from "@/shared/api";
+import {
+  CreateEventSchema,
+  JoinEventSchema,
+  UpdateEventSchema,
+} from "@/shared/api";
 import { prisma } from "../db";
 import { isAuth, procedure, router } from "../trpc";
 import { z } from "zod";
@@ -23,10 +27,12 @@ export const eventRouter = router({
       })
     )
     .use(isAuth)
-    .query(({ input }) => {
-      return prisma.event.findUnique({
+    .query(async ({ input, ctx: { user } }) => {
+      const event = await prisma.event.findUnique({
         where: input,
         select: {
+          id: true,
+          authorId: true,
           title: true,
           description: true,
           date: true,
@@ -41,6 +47,7 @@ export const eventRouter = router({
           },
         },
       });
+      if (event) return { ...event, isEditable: event.authorId === user.id };
     }),
   create: procedure
     .input(CreateEventSchema)
@@ -53,6 +60,27 @@ export const eventRouter = router({
         },
       });
     }),
+  update: procedure
+    .input(UpdateEventSchema)
+    .use(isAuth)
+    .mutation(async ({ input, ctx: { user } }) => {
+      const event = await prisma.event.findUnique({
+        where: { id: input.id },
+      });
+
+      if (event?.authorId !== user.id) {
+        throw new Error("Вы не можете редактировать это событие");
+      }
+
+      return prisma.event.update({
+        where: { id: input.id },
+        data: {
+          title: input.title,
+          description: input.description,
+          date: input.date,
+        },
+      });
+    }),
   join: procedure
     .input(JoinEventSchema)
     .use(isAuth)
@@ -61,6 +89,19 @@ export const eventRouter = router({
         data: {
           eventId: input.id,
           userId: user.id,
+        },
+      });
+    }),
+  leave: procedure
+    .input(JoinEventSchema)
+    .use(isAuth)
+    .mutation(({ input, ctx: { user } }) => {
+      return prisma.participation.delete({
+        where: {
+          userId_eventId: {
+            userId: Number(user.id),
+            eventId: Number(input.id),
+          },
         },
       });
     }),

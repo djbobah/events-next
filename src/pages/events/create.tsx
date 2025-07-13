@@ -14,6 +14,9 @@ export default function CreateEvent() {
   const handleSubmit = (data: CreateEventSchema) => {
     mutate(data);
   };
+  const handleCancel = () => {
+    router.back();
+  };
 
-  return <CreateEventForm onSubmit={handleSubmit} />;
+  return <CreateEventForm onSubmit={handleSubmit} onCancel={handleCancel} />;
 }
